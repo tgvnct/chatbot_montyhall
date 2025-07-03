@@ -7,6 +7,7 @@ st.title("🎲 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
 st.markdown("""
 👋 E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.
 Mas já vou avisando:
+
 🚫 Nada de resposta pronta
 
 🎯 E nem papo fora do assunto
