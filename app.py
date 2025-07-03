@@ -5,8 +5,8 @@ import os
 st.set_page_config(page_title="Chat Monty Hall", page_icon="🎲")
 st.title("🎲 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
 st.markdown("""
-Este assistente pedagógico foi criado para ajudar estudantes a refletirem sobre o problema de Monty Hall.
-Ele **nunca fornecerá a resposta direta** e **jamais sairá do tema**. Em vez disso, responderá sempre com perguntas e pistas que te levem a pensar por conta própria.
+Olá, eu sou Monty, seu assistente para ajudar a refletir sobre o problema de Monty Hall.
+Mas olha só ** eu nunca fornecerei a resposta direta** e **jamais sairei do tema**. Em vez disso, responderei sempre com perguntas e pistas que te levem a pensar por conta própria.
 """)
 
 API_KEY = os.getenv("GEMINI_API_KEY")
