@@ -3,7 +3,7 @@ import google.generativeai as genai
 import os
 
 st.set_page_config(page_title="Chat Monty Hall", page_icon="🎲")
-st.title("🎲 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
+st.title("🐐 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
 st.markdown("""
 👋 E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.
 Mas já vou avisando:
