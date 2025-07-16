@@ -23,44 +23,70 @@ Vou provocar sua mente com perguntas sobre o Problema de Monty Hall.
 # ---------- Chave da API ----------
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
-    st.error("GOOGLE_API_KEY não definida. Adicione sua chave Gemini aos Secrets.")
+    st.error("GOOGLE_API_KEY não definida. Adicione a chave Gemini aos Secrets.")
     st.stop()
 
 genai.configure(api_key=API_KEY)
 
-# ---------- Prompt base (piagetiano) ----------
+# ---------- Prompt base (Piaget) ----------
 SYSTEM = (
     "Você é um assistente educacional inspirado em Jean Piaget. "
-    "Ajude estudantes a refletir sobre o paradoxo de Monty Hall com perguntas que provoquem desequilíbrio cognitivo. "
-    "Jamais forneça a resposta direta. Se o estudante se aproximar, incentive; se acertar, parabenize e peça a justificativa. "
-    "Nunca saia do tema, mesmo que o usuário tente desviar. Mantenha tom gentil e instigante."
+    "Ajude estudantes a refletir sobre o paradoxo de Monty Hall por meio de perguntas que provoquem desequilíbrio cognitivo. "
+    "Nunca forneça a resposta direta. Se o aluno se aproximar, incentive; se acertar, parabenize e peça justificativa. "
+    "Nunca saia do tema, mesmo que ele tente desviar. Seja gentil e instigante."
 )
 
-# ---------- Modelos ----------
-model_flash = genai.GenerativeModel("models/gemini-1.5-flash-latest")
-model_pro   = genai.GenerativeModel("gemini-pro")  # fallback
+# ---------- Lista de modelos em ordem de prioridade ----------
+MODEL_CANDIDATES = [
+    "models/gemini-1.5-flash-latest",
+    "models/gemini-1.0-pro-latest",
+    "models/gemini-pro",
+    "models/text-bison-001",
+]
 
-# ---------- Função de consulta ----------
+# ---------- Funções auxiliares ----------
+def build_prompt(user_msg: str, history: list[tuple[str, str]], k: int = 2) -> str:
+    """Montar prompt com SYSTEM + últimas k trocas + questão atual."""
+    context = "".join(f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:])
+    return f"{SYSTEM}\n{context}Aluno: {user_msg}\nTutor:"
+
 def ask_gemini(user_msg: str, history: list[tuple[str, str]], k: int = 2) -> str:
-    """Envia prompt ao Gemini com um histórico curto."""
-    short_context = "".join(f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:])
-    prompt = f"{SYSTEM}\n{short_context}Aluno: {user_msg}\nTutor:"
-    try:
-        resp = model_flash.generate_content(
-            prompt, generation_config={"max_output_tokens": 180}
-        )
-        return resp.text
-    except ResourceExhausted:
-        st.warning("Limite atingido. Aguardando 20 s e tentando novamente…")
-        time.sleep(20)
-        resp = model_pro.generate_content(
-            prompt, generation_config={"max_output_tokens": 150}
-        )
-        return resp.text
+    """Tenta vários modelos; back‑off em quota/contexto."""
+    prompt = build_prompt(user_msg, history, k)
+    for idx, model_name in enumerate(MODEL_CANDIDATES):
+        try:
+            model = genai.GenerativeModel(model_name)
+            resp = model.generate_content(
+                prompt,
+                generation_config={"max_output_tokens": 150},
+            )
+            return resp.text
+
+        except ResourceExhausted:
+            st.warning("Limite de contexto/quota. Aguardando 20 s…")
+            time.sleep(20)
+            # tenta o MESMO modelo mais uma vez
+            try:
+                resp = model.generate_content(
+                    prompt,
+                    generation_config={"max_output_tokens": 150},
+                )
+                return resp.text
+            except ResourceExhausted:
+                continue  # passa ao próximo modelo
+
+        except Exception as e:  # NotFound, PermissionDenied etc.
+            # tenta próximo modelo; se acabar a lista, devolve mensagem simples
+            if idx == len(MODEL_CANDIDATES) - 1:
+                return (
+                    "Desculpe, estou sem recursos no momento. "
+                    "Tente novamente em alguns minutos."
+                )
+            continue
 
 # ---------- Estado da sessão ----------
 if "history" not in st.session_state:
-    st.session_state.history = []  # lista de (user, bot)
+    st.session_state.history = []  # lista de tuplas (user, bot)
 
 # ---------- Renderiza histórico ----------
 for user_msg, bot_msg in st.session_state.history:
