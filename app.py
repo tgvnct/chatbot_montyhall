@@ -1,12 +1,5 @@
-# app.py — Chatbot Monty Hall com Gemini API (versão segura)
-# Autor: Tiago + ChatGPT | Revisão: jul 2025
-# -----------------------------------------------------------
-# • Mantém no máximo MAX_TURNS trocas para não estourar contexto.
-# • Captura ResourceExhausted e reenvia a pergunta sem histórico.
-# • Usa GOOGLE_API_KEY em secrets.toml / painel de segredos.
-# -----------------------------------------------------------
-
 import os
+import time
 import streamlit as st
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted
@@ -21,70 +14,82 @@ st.markdown(
 
 🚫 **Sem resposta pronta** | 🎯 **Sem papo fora do tema**  
 
-Vou lançar perguntas e pistas para mexer nas suas hipóteses sobre o Problema de Monty Hall.  
+Vou provocar sua mente com perguntas sobre o Problema de Monty Hall.  
 
-💭 **Bora começar?** Mande sua primeira ideia ou dúvida!
+💭 **Bora começar?** Mande a primeira dúvida ou hipótese!
 """
 )
 
 # --------------- CHAVE DA API --------------- #
-API_KEY = os.getenv("GOOGLE_API_KEY")  # defina em secrets.toml ou no painel Secrets
+API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
-    st.error("GOOGLE_API_KEY não definida. Adicione sua chave Gemini aos Secrets.")
+    st.error("GOOGLE_API_KEY não definida. Adicione a chave Gemini nos Secrets.")
     st.stop()
 
 genai.configure(api_key=API_KEY)
 
-# --------------- PROMPT DE SISTEMA --------------- #
-system_instruction = (
-    "Você é um assistente educacional inspirado em Jean Piaget. "
-    "Ajude estudantes a refletir sobre o paradoxo de Monty Hall com perguntas que provoquem desequilíbrio cognitivo. "
+# --------------- PROMPT BASE (PIAGETIANO) --------------- #
+SYSTEM_PROMPT = (
+    "Você é um assistente educacional inspirado em Jean Piaget. "
+    "Ajude estudantes a refletir sobre o paradoxo de Monty Hall com perguntas que provoquem desequilíbrio cognitivo. "
     "Jamais forneça a resposta direta. Se o estudante se aproximar, incentive; se acertar, parabenize e peça a justificativa. "
-    "Nunca saia do tema mesmo que o usuário tente desviar. Mantenha tom gentil e instigante."
+    "Nunca saia do tema, mesmo que o usuário tente desviar. Mantenha tom gentil e instigante."
 )
 
-# --------------- MODELO --------------- #
-model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash-latest",
-    system_instruction=system_instruction,
-)
+# --------------- FUNÇÃO HELPERS --------------- #
 
-# --------------- CONTEXTO / HISTÓRICO --------------- #
-MAX_TURNS = 12  # máximo de trocas antes de reiniciar
+def build_prompt(user_msg: str, history: list[tuple[str, str]], k: int = 2) -> str:
+    """Retorna string: SYSTEM + últimas k trocas + pergunta atual."""
+    context = "".join(
+        f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:]
+    )
+    return f"{SYSTEM_PROMPT}\n{context}Aluno: {user_msg}\nTutor:"
 
-if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat()
-    st.session_state.turns = 0
 
-# Exibe histórico existente
-for msg in st.session_state.chat.history:
-    with st.chat_message(msg.role):
-        st.markdown(msg.parts[0].text)
+def ask_gemini(prompt: str):
+    """Envia prompt; tenta flash→pro; trata ResourceExhausted."""
+    try:
+        resp = genai.generate_content(
+            model="models/gemini-1.5-flash-latest",
+            prompt=prompt,
+            generation_config={"max_output_tokens": 180},
+        )
+        return resp.text
+    except ResourceExhausted:
+        # back‑off simples (quota/minute) + fallback p/ modelo menor
+        time.sleep(20)
+        resp = genai.generate_content(
+            model="gemini-pro",  # menos exigente de cota
+            prompt=prompt,
+            generation_config={"max_output_tokens": 150},
+        )
+        return resp.text
 
-# --------------- ENTRADA DO USUÁRIO --------------- #
+# --------------- ESTADO DA SESSÃO --------------- #
+if "history" not in st.session_state:
+    st.session_state.history = []  # lista de (user, bot)
+
+# Renderiza histórico
+for u, b in st.session_state.history:
+    st.chat_message("user").markdown(u)
+    st.chat_message("model").markdown(b)
+
+# Entrada
 user_input = st.chat_input("Digite sua pergunta ou hipótese sobre Monty Hall…")
 
 if user_input:
-    # Mostra mensagem do usuário
+    # Mostra imediatamente
     st.chat_message("user").markdown(user_input)
 
-    # Incrementa e verifica limite de turnos
-    st.session_state.turns += 1
-    if st.session_state.turns > MAX_TURNS:
-        st.session_state.chat = model.start_chat()
-        st.session_state.turns = 1  # conta a interação atual
+    # Monta prompt curto
+    prompt = build_prompt(user_input, st.session_state.history, k=2)
 
-    # Tenta enviar normalmente
-    try:
-        with st.chat_message("model"):
-            response = st.session_state.chat.send_message(user_input)
-            st.markdown(response.text)
+    # Chama Gemini
+    with st.spinner("Pensando…"):
+        bot_reply = ask_gemini(prompt)
 
-    # Se contexto/quota estourar, reinicia e reenvia sem histórico
-    except ResourceExhausted:
-        st.warning("📉 Limite de contexto ou quota excedido. Reiniciando conversa…")
-        st.session_state.chat = model.start_chat()
-        st.session_state.turns = 1
-        with st.chat_message("model"):
-            safe_response = model.generate_content(user_input)
-            st.markdown(safe_response.text)
+    st.chat_message("model").markdown(bot_reply)
+
+    # Atualiza histórico
+    st.session_state.history.append((user_input, bot_reply))
+```
