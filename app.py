@@ -1,18 +1,10 @@
-# app.py — Chatbot Monty Hall (versão sem chat‑API)
-# ----------------------------------------------------------
-# • Cada chamada usa generate_content() sem histórico pesado.
-# • Inclui apenas as 2 últimas trocas no prompt para evitar estourar contexto.
-# • Back‑off de 20 s + fallback para modelo gemini‑pro se ResourceExhausted.
-# • Usa GOOGLE_API_KEY nos Secrets ou variável de ambiente.
-# ----------------------------------------------------------
-
 import os
 import time
 import streamlit as st
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted
 
-# --------------- CONFIG. DA PÁGINA --------------- #
+# ---------- Configuração da página ----------
 st.set_page_config(page_title="Chat Monty Hall", page_icon="🐐")
 st.title("🐐 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
 
@@ -28,7 +20,7 @@ Vou provocar sua mente com perguntas sobre o Problema de Monty Hall.
 """
 )
 
-# --------------- CHAVE DA API --------------- #
+# ---------- Chave da API ----------
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     st.error("GOOGLE_API_KEY não definida. Adicione sua chave Gemini aos Secrets.")
@@ -36,59 +28,53 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# --------------- PROMPT BASE (PIAGETIANO) --------------- #
-SYSTEM_PROMPT = (
+# ---------- Prompt base (piagetiano) ----------
+SYSTEM = (
     "Você é um assistente educacional inspirado em Jean Piaget. "
     "Ajude estudantes a refletir sobre o paradoxo de Monty Hall com perguntas que provoquem desequilíbrio cognitivo. "
     "Jamais forneça a resposta direta. Se o estudante se aproximar, incentive; se acertar, parabenize e peça a justificativa. "
     "Nunca saia do tema, mesmo que o usuário tente desviar. Mantenha tom gentil e instigante."
 )
 
-# --------------- FUNÇÕES AUXILIARES --------------- #
+# ---------- Modelos ----------
+model_flash = genai.GenerativeModel("models/gemini-1.5-flash-latest")
+model_pro   = genai.GenerativeModel("gemini-pro")  # fallback
 
-def build_prompt(user_msg: str, history: list[tuple[str, str]], k: int = 2) -> str:
-    """Monta o prompt com SYSTEM + últimas k trocas + pergunta atual."""
-    context = "".join(f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:])
-    return f"{SYSTEM_PROMPT}\n{context}Aluno: {user_msg}\nTutor:"
-
-
-def ask_gemini(prompt: str) -> str:
-    """Envia prompt; tenta flash e faz fallback se necessário."""
+# ---------- Função de consulta ----------
+def ask_gemini(user_msg: str, history: list[tuple[str, str]], k: int = 2) -> str:
+    """Envia prompt ao Gemini com um histórico curto."""
+    short_context = "".join(f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:])
+    prompt = f"{SYSTEM}\n{short_context}Aluno: {user_msg}\nTutor:"
     try:
-        response = genai.generate_content(
-            model="models/gemini-1.5-flash-latest",
-            prompt=prompt,
-            generation_config={"max_output_tokens": 180},
+        resp = model_flash.generate_content(
+            prompt, generation_config={"max_output_tokens": 180}
         )
-        return response.text
+        return resp.text
     except ResourceExhausted:
-        time.sleep(20)  # espera e tenta modelo mais leve
-        response = genai.generate_content(
-            model="gemini-pro",
-            prompt=prompt,
-            generation_config={"max_output_tokens": 150},
+        st.warning("Limite atingido. Aguardando 20 s e tentando novamente…")
+        time.sleep(20)
+        resp = model_pro.generate_content(
+            prompt, generation_config={"max_output_tokens": 150}
         )
-        return response.text
+        return resp.text
 
-# --------------- ESTADO DA SESSÃO --------------- #
+# ---------- Estado da sessão ----------
 if "history" not in st.session_state:
-    st.session_state.history = []  # lista de tuplas (user, bot)
+    st.session_state.history = []  # lista de (user, bot)
 
-# --------------- RENDERIZA HISTÓRICO --------------- #
-for u_msg, b_msg in st.session_state.history:
-    st.chat_message("user").markdown(u_msg)
-    st.chat_message("model").markdown(b_msg)
+# ---------- Renderiza histórico ----------
+for user_msg, bot_msg in st.session_state.history:
+    st.chat_message("user").markdown(user_msg)
+    st.chat_message("model").markdown(bot_msg)
 
-# --------------- ENTRADA DO USUÁRIO --------------- #
+# ---------- Entrada do usuário ----------
 user_input = st.chat_input("Digite sua pergunta ou hipótese sobre Monty Hall…")
 
 if user_input:
     st.chat_message("user").markdown(user_input)
 
-    prompt = build_prompt(user_input, st.session_state.history, k=2)
-
     with st.spinner("Pensando…"):
-        bot_reply = ask_gemini(prompt)
+        bot_reply = ask_gemini(user_input, st.session_state.history, k=2)
 
     st.chat_message("model").markdown(bot_reply)
     st.session_state.history.append((user_input, bot_reply))
