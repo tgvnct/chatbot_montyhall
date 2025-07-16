@@ -1,4 +1,12 @@
-# app.py — Chatbot Monty Hall com truncamento de histórico
+# app.py — Chatbot Monty Hall com Gemini API e controle de contexto
+# Autor: Tiago + ChatGPT | Última revisão: jul 2025
+
+"""Resumo
+---------
+• Mantém no máximo `MAX_TURNS` trocas por sessão para evitar estouro de contexto.
+• Reinicia o chat automaticamente se atingir quota ou contexto (ResourceExhausted).
+• Usa variável de ambiente/secret **GOOGLE_API_KEY** para a chave.
+"""
 
 import os
 import streamlit as st
@@ -13,72 +21,70 @@ st.markdown(
     """
 👋 **E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.**  
 
-🚫 **Nada de resposta pronta**  
-🎯 **E nem papo fora do assunto**  
+🚫 **Nada de resposta pronta** | 🎯 **E nem papo fora do assunto**  
 
-Aqui a ideia é fazer você pensar — só vou te dar dicas, pistas e perguntas que ajudem a enxergar o que está por trás do Problema de Monty Hall.  
+Só vou lançar perguntas e pistas para provocar sua mente sobre o Problema de Monty Hall.  
 
-💭 **Bora começar?** Manda aí sua primeira dúvida ou o que você acha que é a solução.
+💭 **Bora começar?** Mande sua primeira dúvida ou hipótese!
 """
 )
 
-# ---------------- CHAVE DA API GOOGLE GEMINI ---------------- #
-API_KEY = os.getenv("GOOGLE_API_KEY")  # definida em secrets.toml ou no painel Secrets
+# ---------------- CHAVE DA API ---------------- #
+API_KEY = os.getenv("GOOGLE_API_KEY")  # defina em secrets.toml ou no painel Secrets
 if not API_KEY:
-    st.error("Chave da API Gemini não encontrada. Defina GOOGLE_API_KEY nos Secrets.")
+    st.error("Chave da API não encontrada. Defina GOOGLE_API_KEY nos Secrets do Streamlit.")
     st.stop()
 
 genai.configure(api_key=API_KEY)
 
-# ---------------- INSTRUÇÃO SISTÊMICA ---------------- #
+# ---------------- PROMPT DE SISTEMA (PIAGETIANO) ---------------- #
 system_instruction = (
-    "Você é um assistente educacional baseado na Epistemologia Genética de Jean Piaget. "
-    "Ajude estudantes a refletirem sobre o problema de Monty Hall, incentivando o raciocínio lógico, a argumentação e a construção ativa do conhecimento. "
-    "Sempre responda com perguntas provocativas que desafiem hipóteses e estimulem a equilibração cognitiva. "
-    "Jamais forneça diretamente a resposta correta. "
-    "Se o estudante se aproximar da resposta, incentive; se acertar, parabenize e peça justificativa."
-    "Se o estudante der a resposta certa, parabenize e termine a conversa"
-    "Nunca desvie do tema, mesmo que o estudante tente mudar de assunto. "
-    "Seja instigante, acolhedor e focado no paradoxo."
+    "Você é um assistente educacional inspirado em Jean Piaget. "
+    "Ajude estudantes a refletir sobre o paradoxo de Monty Hall fazendo perguntas que gerem desequilíbrio cognitivo. "
+    "Nunca forneça a resposta direta. Se o aluno se aproximar da solução, incentive; se acertar, parabenize e peça justificativa. "
+    "Nunca desvie do tema, mesmo que o usuário tente. Mantenha tom gentil e instigante."
 )
 
-# ---------------- MODELO ---------------- #
+# ---------------- INICIALIZA MODELO ---------------- #
 model = genai.GenerativeModel(
     model_name="models/gemini-1.5-flash-latest",
     system_instruction=system_instruction,
 )
 
-# ---------------- CONSTANTES ---------------- #
-MAX_HISTORY = 10  # mantém apenas as 10 últimas interações (user + model)
+# ---------------- CONTROLE DE HISTÓRICO ---------------- #
+MAX_TURNS = 12  # nº máximo de trocas antes de reiniciar
 
-# ---------------- INICIALIZA SESSÃO ---------------- #
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat()
+    st.session_state.turns = 0
 
-# ---------------- EXIBE HISTÓRICO EXISTENTE ---------------- #
+# ---------------- RENDERIZA HISTÓRICO ---------------- #
 for msg in st.session_state.chat.history:
     with st.chat_message(msg.role):
         st.markdown(msg.parts[0].text)
 
 # ---------------- ENTRADA DO USUÁRIO ---------------- #
-user_input = st.chat_input("Digite sua pergunta ou ideia sobre Monty Hall...")
+user_input = st.chat_input("Digite sua pergunta ou ideia sobre Monty Hall…")
+
 if user_input:
+    # Mostra mensagem do usuário
     st.chat_message("user").markdown(user_input)
 
-    # ----- TRUNCA HISTÓRICO PARA EVITAR ResourceExhausted ----- #
-    if len(st.session_state.chat.history) > 2 * MAX_HISTORY:
-        st.session_state.chat.history = st.session_state.chat.history[-2 * MAX_HISTORY :]
+    # Incrementa contador de turnos e verifica limite
+    st.session_state.turns += 1
+    if st.session_state.turns > MAX_TURNS:
+        st.session_state.chat = model.start_chat()
+        st.session_state.turns = 1  # conta a interação atual
 
-    # ----- ENVIA MENSAGEM COM TRATAMENTO DE ERRO ----- #
+    # Tenta enviar mensagem, com captura de erro
     try:
         with st.chat_message("model"):
             response = st.session_state.chat.send_message(user_input)
             st.markdown(response.text)
     except ResourceExhausted:
-        st.warning(
-            "Limite de contexto ou quota atingido. O histórico foi reiniciado para continuar a conversa."
-        )
-        st.session_state.chat = model.start_chat()  # zera histórico
+        st.warning("Contexto ou quota excedidos; reiniciando a conversa para continuar.")
+        st.session_state.chat = model.start_chat()
+        st.session_state.turns = 1
         with st.chat_message("model"):
             response = st.session_state.chat.send_message(user_input)
             st.markdown(response.text)
