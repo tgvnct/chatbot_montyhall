@@ -9,9 +9,17 @@ st.set_page_config(page_title="Chat Monty Hall", page_icon="🐐")
 st.title("🐐 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
 
 st.markdown("""
-👋 **E aí! Eu sou o Monty.**  
-🚫 **Nada de resposta pronta** | 🎯 **Sem papo fora do tema**  
-Envie sua dúvida ou hipótese!
+👋 E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.
+Mas já vou avisando:
+
+🚫 Nada de resposta pronta
+
+🎯 E nem papo fora do assunto
+
+Aqui a ideia é fazer você pensar — eu só vou te dar dicas, pistas e perguntas que te ajudem a enxergar o que está por trás do tal Problema de Monty Hall.
+
+💭 Bora começar? Manda aí sua primeira dúvida ou o que você acha que é a solução.
+
 """)
 
 # ----- Chave da API -----
