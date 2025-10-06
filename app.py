@@ -26,14 +26,13 @@ except (FileNotFoundError, KeyError):
 system_instruction = """
 Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. Seu método de ensino é socrático, ou seja, você guia os alunos com perguntas em vez de dar respostas diretas. Suas regras são:
 1.  **Nunca revele a resposta final** (que trocar de porta aumenta a probabilidade de ganhar de 1/3 para 2/3). Seu objetivo é fazer o aluno chegar a essa conclusão sozinho.
-2.  **Comece a conversa** se apresentando e explicando o problema de forma simples: Há 3 portas. Atrás de uma há um carro (prêmio) e, atrás das outras duas, bodes (nada). O jogador escolhe uma porta. Você, como apresentador, abre uma das outras duas portas, revelando um bode. Então, você oferece ao jogador a chance de trocar sua escolha inicial pela outra porta fechada. A pergunta é: "É vantajoso trocar?"
-3.  **Use a analogia das 100 portas** se o aluno estiver com dificuldade. Descreva o cenário: "Imagine 100 portas. Você escolhe uma (chance de 1/100). Eu abro 98 portas que têm bodes. Sobram a sua porta original e uma outra. Você ainda acha que a sua porta tem a mesma chance que a outra, que agora concentra a probabilidade de 99/100?"
-4.  **Seja encorajador.** Se o aluno der uma resposta incorreta, não diga "errado". Em vez disso, use frases como: "Entendo seu raciocínio, mas vamos pensar por outro ângulo..." ou "Essa é uma intuição comum. Que tal analisarmos as probabilidades?".
-5.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
+2.  **Use a analogia das 100 portas** se o aluno estiver com dificuldade. Descreva o cenário: "Imagine 100 portas. Você escolhe uma (chance de 1/100). Eu abro 98 portas que têm bodes. Sobram a sua porta original e uma outra. Você ainda acha que a sua porta tem a mesma chance que a outra, que agora concentra a probabilidade de 99/100?"
+3.  **Seja encorajador.** Se o aluno der uma resposta incorreta, não diga "errado". Em vez disso, use frases como: "Entendo seu raciocínio, mas vamos pensar por outro ângulo..." ou "Essa é uma intuição comum. Que tal analisarmos as probabilidades?".
+4.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
+5.  **Não converse sobre outros assuntos.** Se o usuário perguntar sobre algo não relacionado ao problema de Monty Hall, responda de forma educada que seu único propósito é discutir este paradoxo.
 """
 
 # URL do endpoint da API, usando o nome de modelo que sabemos que está disponível.
-# ESTA É A LINHA QUE FOI CORRIGIDA.
 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
 
 # Cabeçalhos necessários para a requisição HTTP.
@@ -44,7 +43,22 @@ headers = {
 # --- Gerenciamento do Histórico da Conversa ---
 # st.session_state é usado para manter o histórico entre as interações.
 if "history" not in st.session_state:
-    st.session_state.history = []
+    # Define a mensagem de boas-vindas que aparecerá na primeira vez que o app for carregado.
+    welcome_message = """
+👋 E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.
+
+Mas já vou avisando:
+
+🚫 Nada de resposta pronta
+
+🎯 E nem papo fora do assunto
+
+Aqui a ideia é fazer você pensar — eu só vou te dar dicas, pistas e perguntas que te ajudem a enxergar o que está por trás do tal Problema de Monty Hall.
+
+💭 Bora começar? Manda aí sua primeira dúvida ou o que você acha que é a solução.
+"""
+    # Inicia o histórico com a mensagem de boas-vindas do assistente.
+    st.session_state.history = [{"role": "assistant", "content": welcome_message}]
 
 # Exibe as mensagens do histórico na interface.
 for message in st.session_state.history:
@@ -59,14 +73,16 @@ def get_gemini_response(history):
     # Adicionamos uma resposta do "modelo" para simular o início de uma conversa.
     formatted_contents = [
         {"role": "user", "parts": [{"text": system_instruction}]},
-        {"role": "model", "parts": [{"text": "Entendido. Começarei a atuar como um tutor socrático."}]}
+        {"role": "model", "parts": [{"text": "Entendido. Começarei a atuar como um tutor socrático, seguindo todas as regras."}]}
     ]
 
     # Adiciona o histórico real da conversa.
     for msg in history:
         # O papel do usuário é "user", o nosso é "assistant", mas para a API, o nosso papel é "model".
         role = "user" if msg["role"] == "user" else "model"
-        formatted_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+        # Ignora a mensagem de boas-vindas inicial ao enviar para a API, pois ela é apenas para exibição.
+        if msg["content"] != st.session_state.history[0]["content"]:
+             formatted_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
     # Cria o corpo (payload) da requisição.
     payload = json.dumps({
