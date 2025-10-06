@@ -64,13 +64,14 @@ def get_gemini_response(prompt, history):
     api_history.append({"role": "user", "parts": [{"text": prompt}]})
 
     # Cria o corpo (payload) da requisição.
-payload = json.dumps({
-    "contents": api_history,
-    "system_instruction": {  # <--- ESTA É A CORREÇÃO
-        "parts": [{"text": system_instruction}]
-    }
-})
+    payload = json.dumps({
+        "contents": api_history,
+        "system_instruction": {
+            "parts": [{"text": system_instruction}]
+        }
+    })
 
+    # O bloco try-except começa aqui, corretamente indentado.
     try:
         # Envia a requisição para a API.
         response = requests.post(url, headers=headers, data=payload, timeout=60)
@@ -100,3 +101,4 @@ if prompt := st.chat_input("Faça sua pergunta ou responda ao tutor..."):
     st.session_state.history.append({"role": "assistant", "content": response_text})
     with st.chat_message("assistant"):
         st.markdown(response_text)
+
