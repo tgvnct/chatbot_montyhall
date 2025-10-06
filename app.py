@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # --- Títulos e Cabeçalho ---
-st.title("🐐 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
+st.title("🐐 Chatbot: reflita sobre o Paradoxo de Monty Hall")
 st.caption("Um assistente virtual para ajudar a entender o problema e a solução.")
 
 # --- Configuração da API do Gemini ---
