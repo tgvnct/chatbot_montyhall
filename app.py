@@ -32,8 +32,8 @@ Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. 
 5.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
 """
 
-# URL do endpoint da API do Gemini, corrigido para a versão v1beta.
-url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key={api_key}"
+# URL do endpoint da API, usando o nome de modelo mais geral "gemini-pro".
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
 
 # Cabeçalhos necessários para a requisição HTTP.
 headers = {
