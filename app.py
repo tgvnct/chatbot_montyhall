@@ -10,8 +10,8 @@ st.set_page_config(
 )
 
 # --- Títulos e Cabeçalho ---
-st.title("🤖 Chatbot Tutor: O Paradoxo de Monty Hall")
-st.caption("Um assistente virtual para ajudar a entender por que trocar de porta é a melhor estratégia.")
+st.title("🐐 Chatbot Tutor: O Paradoxo de Monty Hall")
+st.caption("Um assistente virtual para ajudar a entender o problema.")
 
 # --- Configuração da API do Gemini ---
 # Tenta obter a chave de API dos segredos do Streamlit.
