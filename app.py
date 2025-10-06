@@ -64,12 +64,12 @@ def get_gemini_response(prompt, history):
     api_history.append({"role": "user", "parts": [{"text": prompt}]})
 
     # Cria o corpo (payload) da requisição.
-    payload = json.dumps({
-        "contents": api_history,
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        }
-    })
+payload = json.dumps({
+    "contents": api_history,
+    "system_instruction": {  # <--- ESTA É A CORREÇÃO
+        "parts": [{"text": system_instruction}]
+    }
+})
 
     try:
         # Envia a requisição para a API.
