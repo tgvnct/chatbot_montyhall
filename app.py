@@ -1,86 +1,76 @@
-# app.py — Monty Hall “mensagens avulsas”
+import streamlit as st
+import google.generativeai as genai
+import os
 
-import os, streamlit as st, google.generativeai as genai
-from google.api_core.exceptions import ResourceExhausted
-import time
-
-# ----- Configuração da página -----
-st.set_page_config(page_title="Chat Monty Hall", page_icon="🐐")
-st.title("🐐 Chatbot: Reflita sobre o Paradoxo de Monty Hall")
-
-st.markdown("""
-👋 E aí! Eu sou o Monty, seu parceiro nessa missão de decifrar o enigma das portas.
-Mas já vou avisando:
-
-🚫 Nada de resposta pronta
-
-🎯 E nem papo fora do assunto
-
-Aqui a ideia é fazer você pensar — eu só vou te dar dicas, pistas e perguntas que te ajudem a enxergar o que está por trás do tal Problema de Monty Hall.
-
-💭 Bora começar? Manda aí sua primeira dúvida ou o que você acha que é a solução.
-
-""")
-
-# ----- Chave da API -----
-API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    st.error("Defina GOOGLE_API_KEY ou GEMINI_API_KEY nos Secrets.")
-    st.stop()
-genai.configure(api_key=API_KEY)
-
-# ----- Prompt base -----
-SYSTEM = (
-"Você é um assistente educacional baseado na Epistemologia Genética de Jean Piaget. "
-"Ajude estudantes a refletirem sobre o problema de Monty Hall, incentivando o raciocínio lógico, a argumentação e a construção ativa do conhecimento. "
-"Sempre responda com perguntas provocativas que desafiem hipóteses e estimulem a equilibração cognitiva. "
-"Jamais forneça diretamente a resposta correta. "
-"Se o estudante estiver se aproximando da resposta correta (como reconhecer que trocar de porta aumenta as chances), incentive com cuidado, dizendo que ele está no caminho certo e peça que continue refletindo. "
-"Se o estudante der a resposta correta (por exemplo, dizendo que trocar dá 2/3 de chance de ganhar), parabenize brevemente e peça que justifique seu raciocínio e termine a conversa"
-"Nunca desvie do tema, mesmo que o estudante tente mudar de assunto. "
-"Seja instigante, acolhedor, socrático, focado no paradoxo e coerente com a abordagem piagetiana."
+# --- Configuração da Página ---
+# Define o título que aparece na aba do navegador e o ícone.
+st.set_page_config(
+    page_title="Tutor do Paradoxo de Monty Hall",
+    page_icon="🐐",
+    layout="centered",
 )
 
-# ----- Modelo preferencial e fallback -----
-MODEL_MAIN = "gemini-2.5-flash"
-MODEL_BACK = "gemini-2.5-flash"
+# --- Títulos e Cabeçalho ---
+# Título principal exibido na página.
+st.title("🤖 Chatbot Tutor: O Paradoxo de Monty Hall")
+st.caption("Um assistente virtual para ajudar a entender por que trocar de porta é a melhor estratégia.")
 
-def ask_gemini(user_msg, history, k=2):
-    """Envia prompt curto; faz fallback se quota/contexto."""
-    short_hist = "".join(f"Aluno: {u}\nTutor: {b}\n" for u, b in history[-k:])
-    prompt = f"{SYSTEM}\n{short_hist}Aluno: {user_msg}\nTutor:"
-    for model_name in (MODEL_MAIN, MODEL_BACK):
-        try:
-            model = genai.GenerativeModel(model_name)
-            resp = model.generate_content(prompt, generation_config={"max_output_tokens": 160})
-            return resp.text
-        except ResourceExhausted:
-            st.warning("Limite de uso — aguardando 20 s…")
-            time.sleep(20)
-            # tenta de novo o mesmo modelo após pausa
-            try:
-                resp = model.generate_content(prompt, generation_config={"max_output_tokens": 160})
-                return resp.text
-            except ResourceExhausted:
-                continue
-        except Exception:
-            continue
-    return "Desculpe, os recursos estão indisponíveis no momento. Tente mais tarde."
+# --- Configuração da API do Gemini ---
+# A forma mais segura de gerenciar chaves de API no Streamlit é usando st.secrets.
+# O código tentará obter a chave de st.secrets. Se não encontrar, ele exibe uma mensagem de erro.
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except (FileNotFoundError, KeyError):
+    st.error("Chave de API do Gemini não encontrada. Configure-a em 'Settings > Secrets' no seu app Streamlit.")
+    st.stop()
 
-# ----- Histórico apenas para exibição -----
-if "history" not in st.session_state:
-    st.session_state.history = []  # lista de (user, bot)
+genai.configure(api_key=api_key)
 
-# Renderiza histórico na interface (não será reenviado)
-for u, b in st.session_state.history:
-    st.chat_message("user").markdown(u)
-    st.chat_message("model").markdown(b)
+# --- Instruções do Modelo (System Prompt) ---
+# Esta é a parte mais importante. Define a "personalidade" e as regras do chatbot.
+# O modelo seguirá estas instruções em todas as interações.
+system_instruction = """
+Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. Seu método de ensino é socrático, ou seja, você guia os alunos com perguntas em vez de dar respostas diretas.
 
-# Entrada do usuário
-user_input = st.chat_input("Digite sua dúvida ou hipótese…")
-if user_input:
-    st.chat_message("user").markdown(user_input)
-    with st.spinner("Pensando…"):
-        bot_reply = ask_gemini(user_input, st.session_state.history, k=2)
-    st.chat_message("model").markdown(bot_reply)
-    st.session_state.history.append((user_input, bot_reply))
+Suas regras são:
+1.  **Nunca revele a resposta final** (que trocar de porta aumenta a probabilidade de ganhar de 1/3 para 2/3). Seu objetivo é fazer o aluno chegar a essa conclusão sozinho.
+2.  **Comece a conversa** se apresentando e explicando o problema de forma simples: Há 3 portas. Atrás de uma há um carro (prêmio) e, atrás das outras duas, bodes (nada). O jogador escolhe uma porta. Você, como apresentador, abre uma das outras duas portas, revelando um bode. Então, você oferece ao jogador a chance de trocar sua escolha inicial pela outra porta fechada. A pergunta é: "É vantajoso trocar?"
+3.  **Use a analogia das 100 portas** se o aluno estiver com dificuldade. Descreva o cenário: "Imagine 100 portas. Você escolhe uma (chance de 1/100). Eu abro 98 portas que têm bodes. Sobram a sua porta original e uma outra. Você ainda acha que a sua porta tem a mesma chance que a outra, que agora concentra a probabilidade de 99/100?"
+4.  **Seja encorajador.** Se o aluno der uma resposta incorreta, não diga "errado". Em vez disso, use frases como: "Entendo seu raciocínio, mas vamos pensar por outro ângulo..." ou "Essa é uma intuição comum. Que tal analisarmos as probabilidades?".
+5.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
+"""
+
+# --- Inicialização do Modelo e do Chat ---
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction=system_instruction
+)
+
+# O Streamlit recarrega o script a cada interação.
+# Usamos st.session_state para manter o histórico do chat salvo entre as recargas.
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
+
+# --- Exibição do Histórico da Conversa ---
+# Percorre o histórico salvo e exibe cada mensagem na tela.
+for message in st.session_state.chat.history:
+    role = "user" if message.role == "user" else "assistant"
+    with st.chat_message(role):
+        st.markdown(message.parts[0].text)
+
+# --- Entrada do Usuário ---
+# Cria a caixa de entrada de texto no final da página.
+if prompt := st.chat_input("Faça sua pergunta ou responda ao tutor..."):
+    # Exibe a mensagem do usuário na tela.
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Envia a mensagem para a API do Gemini e aguarda a resposta.
+    try:
+        response = st.session_state.chat.send_message(prompt)
+        # Exibe a resposta do chatbot.
+        with st.chat_message("assistant"):
+            st.markdown(response.text)
+    except Exception as e:
+        # Exibe uma mensagem de erro amigável se a comunicação com a API falhar.
+        st.error(f"Ocorreu um erro ao processar sua mensagem: {e}")
