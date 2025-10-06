@@ -42,8 +42,8 @@ SYSTEM = (
 )
 
 # ----- Modelo preferencial e fallback -----
-MODEL_MAIN = "models/gemini-1.5-flash-latest"
-MODEL_BACK = "models/gemini-1.0-pro-latest"
+MODEL_MAIN = "gemini-2.5-flash"
+MODEL_BACK = "gemini-2.5-flash"
 
 def ask_gemini(user_msg, history, k=2):
     """Envia prompt curto; faz fallback se quota/contexto."""
