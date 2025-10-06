@@ -32,8 +32,8 @@ Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. 
 5.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
 """
 
-# URL do endpoint da API do Gemini v1 (a versão estável).
-url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key={api_key}"
+# URL do endpoint da API do Gemini, corrigido para a versão v1beta.
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key={api_key}"
 
 # Cabeçalhos necessários para a requisição HTTP.
 headers = {
@@ -67,7 +67,7 @@ def get_gemini_response(history):
         role = "user" if msg["role"] == "user" else "model"
         formatted_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
-    # Cria o corpo (payload) da requisição, agora sem o campo "system_instruction".
+    # Cria o corpo (payload) da requisição.
     payload = json.dumps({
         "contents": formatted_contents
     })
