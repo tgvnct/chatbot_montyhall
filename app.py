@@ -53,25 +53,25 @@ for message in st.session_state.history:
 
 # --- Função para chamar a API ---
 # Esta função formata os dados e envia para o Google, tratando a resposta.
-def get_gemini_response(prompt, history):
-    # Formata o histórico para o formato que a API espera.
-    api_history = []
-    for msg in history:
-        role = "user" if msg["role"] == "user" else "model"
-        api_history.append({"role": role, "parts": [{"text": msg["content"]}]})
-    
-    # Adiciona a nova mensagem do usuário.
-    api_history.append({"role": "user", "parts": [{"text": prompt}]})
+def get_gemini_response(history):
+    # Prepara o modelo com a instrução de sistema como a primeira mensagem.
+    # Adicionamos uma resposta do "modelo" para simular o início de uma conversa.
+    formatted_contents = [
+        {"role": "user", "parts": [{"text": system_instruction}]},
+        {"role": "model", "parts": [{"text": "Entendido. Começarei a atuar como um tutor socrático."}]}
+    ]
 
-    # Cria o corpo (payload) da requisição.
+    # Adiciona o histórico real da conversa.
+    for msg in history:
+        # O papel do usuário é "user", o nosso é "assistant", mas para a API, o nosso papel é "model".
+        role = "user" if msg["role"] == "user" else "model"
+        formatted_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+    # Cria o corpo (payload) da requisição, agora sem o campo "system_instruction".
     payload = json.dumps({
-        "contents": api_history,
-        "system_instruction": {
-            "parts": [{"text": system_instruction}]
-        }
+        "contents": formatted_contents
     })
 
-    # O bloco try-except começa aqui, corretamente indentado.
     try:
         # Envia a requisição para a API.
         response = requests.post(url, headers=headers, data=payload, timeout=60)
@@ -89,16 +89,19 @@ def get_gemini_response(prompt, history):
 
 # --- Interação do Usuário ---
 if prompt := st.chat_input("Faça sua pergunta ou responda ao tutor..."):
-    # Adiciona e exibe a mensagem do usuário.
+    # Adiciona a nova mensagem do usuário ao histórico.
     st.session_state.history.append({"role": "user", "content": prompt})
+    # Exibe a mensagem do usuário na interface.
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Obtém e exibe a resposta do chatbot, mostrando um indicador de "carregando".
+    # Obtém a resposta do chatbot passando todo o histórico da sessão.
     with st.spinner("Pensando..."):
-        response_text = get_gemini_response(prompt, st.session_state.history)
+        response_text = get_gemini_response(st.session_state.history)
     
+    # Adiciona a resposta do chatbot ao histórico.
     st.session_state.history.append({"role": "assistant", "content": response_text})
+    # Exibe a resposta do chatbot na interface.
     with st.chat_message("assistant"):
         st.markdown(response_text)
 
