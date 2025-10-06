@@ -1,9 +1,8 @@
 import streamlit as st
-import google.generativeai as genai
-import os
+import requests
+import json
 
 # --- Configuração da Página ---
-# Define o título que aparece na aba do navegador e o ícone.
 st.set_page_config(
     page_title="Tutor do Paradoxo de Monty Hall",
     page_icon="🐐",
@@ -11,28 +10,21 @@ st.set_page_config(
 )
 
 # --- Títulos e Cabeçalho ---
-# Título principal exibido na página.
 st.title("🤖 Chatbot Tutor: O Paradoxo de Monty Hall")
 st.caption("Um assistente virtual para ajudar a entender por que trocar de porta é a melhor estratégia.")
 
 # --- Configuração da API do Gemini ---
-# A forma mais segura de gerenciar chaves de API no Streamlit é usando st.secrets.
-# O código tentará obter a chave de st.secrets. Se não encontrar, ele exibe uma mensagem de erro.
+# Tenta obter a chave de API dos segredos do Streamlit.
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except (FileNotFoundError, KeyError):
-    st.error("Chave de API do Gemini não encontrada. Configure-a em 'Settings > Secrets' no seu app Streamlit.")
+    st.error("Chave de API do Gemini não encontrada. Configure-a em 'Settings > Secrets'.")
     st.stop()
 
-genai.configure(api_key=api_key)
-
 # --- Instruções do Modelo (System Prompt) ---
-# Esta é a parte mais importante. Define a "personalidade" e as regras do chatbot.
-# O modelo seguirá estas instruções em todas as interações.
+# Define a "personalidade" e as regras que o chatbot deve seguir.
 system_instruction = """
-Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. Seu método de ensino é socrático, ou seja, você guia os alunos com perguntas em vez de dar respostas diretas.
-
-Suas regras são:
+Você é um tutor amigável e paciente, especialista no Paradoxo de Monty Hall. Seu método de ensino é socrático, ou seja, você guia os alunos com perguntas em vez de dar respostas diretas. Suas regras são:
 1.  **Nunca revele a resposta final** (que trocar de porta aumenta a probabilidade de ganhar de 1/3 para 2/3). Seu objetivo é fazer o aluno chegar a essa conclusão sozinho.
 2.  **Comece a conversa** se apresentando e explicando o problema de forma simples: Há 3 portas. Atrás de uma há um carro (prêmio) e, atrás das outras duas, bodes (nada). O jogador escolhe uma porta. Você, como apresentador, abre uma das outras duas portas, revelando um bode. Então, você oferece ao jogador a chance de trocar sua escolha inicial pela outra porta fechada. A pergunta é: "É vantajoso trocar?"
 3.  **Use a analogia das 100 portas** se o aluno estiver com dificuldade. Descreva o cenário: "Imagine 100 portas. Você escolhe uma (chance de 1/100). Eu abro 98 portas que têm bodes. Sobram a sua porta original e uma outra. Você ainda acha que a sua porta tem a mesma chance que a outra, que agora concentra a probabilidade de 99/100?"
@@ -40,37 +32,71 @@ Suas regras são:
 5.  **Mantenha as respostas curtas e focadas** em uma única pergunta ou conceito por vez para não sobrecarregar o aluno.
 """
 
-# --- Inicialização do Modelo e do Chat ---
-model = genai.GenerativeModel(
-    model_name="gemini-1.0-pro",
-    system_instruction=system_instruction
-)
+# URL do endpoint da API do Gemini v1 (a versão estável).
+url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key={api_key}"
 
-# O Streamlit recarrega o script a cada interação.
-# Usamos st.session_state para manter o histórico do chat salvo entre as recargas.
-if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat(history=[])
+# Cabeçalhos necessários para a requisição HTTP.
+headers = {
+    'Content-Type': 'application/json'
+}
 
-# --- Exibição do Histórico da Conversa ---
-# Percorre o histórico salvo e exibe cada mensagem na tela.
-for message in st.session_state.chat.history:
-    role = "user" if message.role == "user" else "assistant"
+# --- Gerenciamento do Histórico da Conversa ---
+# st.session_state é usado para manter o histórico entre as interações.
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# Exibe as mensagens do histórico na interface.
+for message in st.session_state.history:
+    role = "user" if message["role"] == "user" else "assistant"
     with st.chat_message(role):
-        st.markdown(message.parts[0].text)
+        st.markdown(message["content"])
 
-# --- Entrada do Usuário ---
-# Cria a caixa de entrada de texto no final da página.
+# --- Função para chamar a API ---
+# Esta função formata os dados e envia para o Google, tratando a resposta.
+def get_gemini_response(prompt, history):
+    # Formata o histórico para o formato que a API espera.
+    api_history = []
+    for msg in history:
+        role = "user" if msg["role"] == "user" else "model"
+        api_history.append({"role": role, "parts": [{"text": msg["content"]}]})
+    
+    # Adiciona a nova mensagem do usuário.
+    api_history.append({"role": "user", "parts": [{"text": prompt}]})
+
+    # Cria o corpo (payload) da requisição.
+    payload = json.dumps({
+        "contents": api_history,
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        }
+    })
+
+    try:
+        # Envia a requisição para a API.
+        response = requests.post(url, headers=headers, data=payload, timeout=60)
+        response.raise_for_status() # Lança um erro para respostas HTTP ruins (4xx ou 5xx).
+        data = response.json()
+        
+        # Extrai o texto da resposta da estrutura JSON complexa.
+        candidate = data.get("candidates", [{}])[0]
+        content = candidate.get("content", {}).get("parts", [{}])[0]
+        return content.get("text", "Não foi possível obter uma resposta do modelo.")
+    except requests.exceptions.RequestException as e:
+        return f"Erro de rede ou na API: {e}\nResposta recebida: {response.text if 'response' in locals() else 'N/A'}"
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        return f"Erro ao processar a resposta da API: {e}\nJSON recebido: {data}"
+
+# --- Interação do Usuário ---
 if prompt := st.chat_input("Faça sua pergunta ou responda ao tutor..."):
-    # Exibe a mensagem do usuário na tela.
+    # Adiciona e exibe a mensagem do usuário.
+    st.session_state.history.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Envia a mensagem para a API do Gemini e aguarda a resposta.
-    try:
-        response = st.session_state.chat.send_message(prompt)
-        # Exibe a resposta do chatbot.
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
-    except Exception as e:
-        # Exibe uma mensagem de erro amigável se a comunicação com a API falhar.
-        st.error(f"Ocorreu um erro ao processar sua mensagem: {e}")
+    # Obtém e exibe a resposta do chatbot, mostrando um indicador de "carregando".
+    with st.spinner("Pensando..."):
+        response_text = get_gemini_response(prompt, st.session_state.history)
+    
+    st.session_state.history.append({"role": "assistant", "content": response_text})
+    with st.chat_message("assistant"):
+        st.markdown(response_text)
